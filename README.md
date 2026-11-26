@@ -12,7 +12,7 @@ MCP (Model Context Protocol) is a lightweight protocol that lets AI clients disc
 - Bridges MCP tool calls to gRPC methods.
 - Supports MCP tool metadata (name, title, description, annotations).
 - Generates strongly-typed JSON Schema for tool inputs derived from protobuf message definitions.
-- Provides a lightweight MCP HTTP handler (`runtime.MCPServeMux`) with pluggable request logging.
+- Provides an MCP HTTP handler (`runtime.MCPServeMux`), built on the official [MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk), with pluggable request logging.
 - Keeps MCP tooling stateless (no sessions).
 
 ## MCP spec compatibility
@@ -21,6 +21,9 @@ MCP (Model Context Protocol) is a lightweight protocol that lets AI clients disc
 | --- | --- |
 | v0.6.0+ | [2025-11-25 (JSON-RPC 2.0)](https://modelcontextprotocol.io/specification/2025-11-25/) |
 | v0.7.0+ | adds [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) (`io.modelcontextprotocol/ui`, spec 2026-01-26) |
+| unreleased | [2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/), and 2024-11-05 through 2025-11-25 for clients that still use the `initialize` handshake |
+
+The protocol is served by the official [MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk) over stateless Streamable HTTP with plain JSON responses. Clients must send `Content-Type: application/json` and `Accept: application/json, text/event-stream`; a request sent as 2026-07-28 (`MCP-Protocol-Version: 2026-07-28`) must also carry the `Mcp-Method` and, for `tools/call` and `resources/read`, `Mcp-Name` headers. A tool whose gRPC call fails returns a result with `isError: true`, not a JSON-RPC error.
 
 ## MCP annotations
 
