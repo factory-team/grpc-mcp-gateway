@@ -3,9 +3,10 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"sort"
 	"strings"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // MCP Apps (SEP-1865) identifiers.
@@ -48,7 +49,9 @@ type Resource struct {
 }
 
 // RegisterResource registers a resource served by resources/list and
-// resources/read. App resources must use the ui:// scheme.
+// resources/read. App resources must use the ui:// scheme. Register resources
+// before the first request: the resources capability and the MCP Apps
+// extension are advertised from what is registered at that point.
 func (mux *MCPServeMux) RegisterResource(res *Resource) {
 	if res == nil || res.URI == "" {
 		panic("mcp resource requires a uri")
@@ -59,6 +62,11 @@ func (mux *MCPServeMux) RegisterResource(res *Resource) {
 	mux.mu.Lock()
 	defer mux.mu.Unlock()
 	mux.resources[res.URI] = res
+	if mux.server != nil {
+		addResource(mux.server, res)
+		return
+	}
+	addResource(mux.probe, res)
 }
 
 // MissingUIResources returns the ui:// URIs that registered tools reference
@@ -143,66 +151,19 @@ func resourceMeta(res *Resource) map[string]any {
 	return meta
 }
 
-func (mux *MCPServeMux) handleListResources(w http.ResponseWriter, _ context.Context, id interface{}) {
-	mux.mu.RLock()
-	defer mux.mu.RUnlock()
-
-	uris := make([]string, 0, len(mux.resources))
-	for uri := range mux.resources {
-		uris = append(uris, uri)
-	}
-	sort.Strings(uris)
-
-	resources := make([]map[string]any, 0, len(uris))
-	for _, uri := range uris {
-		res := mux.resources[uri]
-		entry := map[string]any{
-			"uri":  res.URI,
-			"name": res.Name,
-		}
-		if res.Title != "" {
-			entry["title"] = res.Title
-		}
-		if res.Description != "" {
-			entry["description"] = res.Description
-		}
-		if res.MIMEType != "" {
-			entry["mimeType"] = res.MIMEType
-		}
-		if meta := resourceMeta(res); meta != nil {
-			entry["_meta"] = meta
-		}
-		resources = append(resources, entry)
-	}
-
-	sendSuccess(w, id, map[string]any{"resources": resources})
-}
-
-func (mux *MCPServeMux) handleReadResource(w http.ResponseWriter, _ context.Context, id interface{}, params map[string]interface{}) {
-	uri, _ := params["uri"].(string)
-	if uri == "" {
-		sendError(w, id, -32602, "Missing resource uri")
-		return
-	}
-
-	mux.mu.RLock()
-	res, ok := mux.resources[uri]
-	mux.mu.RUnlock()
-	if !ok {
-		sendError(w, id, -32002, fmt.Sprintf("Resource not found: %s", uri))
-		return
-	}
-
-	content := map[string]any{
-		"uri":  res.URI,
-		"text": res.Text,
-	}
-	if res.MIMEType != "" {
-		content["mimeType"] = res.MIMEType
-	}
-	if meta := resourceMeta(res); meta != nil {
-		content["_meta"] = meta
-	}
-
-	sendSuccess(w, id, map[string]any{"contents": []map[string]any{content}})
+// addResource registers res on an SDK server.
+func addResource(server *mcp.Server, res *Resource) {
+	meta := resourceMeta(res)
+	server.AddResource(&mcp.Resource{
+		URI:         res.URI,
+		Name:        res.Name,
+		Title:       res.Title,
+		Description: res.Description,
+		MIMEType:    res.MIMEType,
+		Meta:        meta,
+	}, func(context.Context, *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{
+			URI: res.URI, MIMEType: res.MIMEType, Text: res.Text, Meta: meta,
+		}}}, nil
+	})
 }

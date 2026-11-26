@@ -12,9 +12,19 @@ import (
 
 func rpc(t *testing.T, mux *MCPServeMux, method string, params map[string]any) map[string]any {
 	t.Helper()
+	if method == "initialize" && params == nil {
+		params = map[string]any{
+			"protocolVersion": "2025-11-25",
+			"capabilities":    map[string]any{},
+			"clientInfo":      map[string]any{"name": "test", "version": "v0"},
+		}
+	}
 	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body)))
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	mux.ServeHTTP(rec, req)
 	var resp map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("%s: decode: %v", method, err)
@@ -114,7 +124,8 @@ func TestResourcesListAndRead(t *testing.T) {
 	}
 
 	missing := rpc(t, mux, "resources/read", map[string]any{"uri": "ui://test/nope.html"})
-	if code := missing["error"].(map[string]any)["code"]; code != float64(-32002) {
+	// Invalid Params, as of spec 2026-07-28 (SEP-2164); earlier specs used -32002.
+	if code := missing["error"].(map[string]any)["code"]; code != float64(-32602) {
 		t.Fatalf("missing resource code = %v", code)
 	}
 

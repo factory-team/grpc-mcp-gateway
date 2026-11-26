@@ -23,7 +23,14 @@ func main() {
 		},
 	})
 
-	resp, err := http.Post("http://localhost:8090/", "application/json", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, "http://localhost:8090/", bytes.NewReader(body))
+	if err != nil {
+		log.Fatalf("build request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	// Streamable HTTP requires the client to accept both media types.
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.Fatalf("request failed: %v", err)
 	}

@@ -68,6 +68,7 @@ func TestGreeterMCPFlow(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
 	rec := httptest.NewRecorder()
 	mcpMux.ServeHTTP(rec, req)
 
